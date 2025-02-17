@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Extended Gravity Simulation</title>
+  <style>
+    /* Основные стили */
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #000;
+      transition: background 0.8s ease;
+    }
+    canvas { 
+      display: block; 
+      transition: filter 0.5s ease;
+    }
+    /* Панель управления */
+    #controlPanel {
+      position: absolute;
+      top: 10px;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(20,20,30,0.95);
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      z-index: 10;
+      max-width: 240px;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255,255,255,0.1);
+      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    #controlPanel:hover {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+      border-color: rgba(108,140,213,0.3);
+    }
+    /* Заголовки – без hover-эффектов */
+    #controlPanel h3 {
+      margin: 0 0 10px 0;
+      font-size: 1em;
+      color: #fff;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #controlPanel h3::before {
+      margin-top: 5px;
+      content: '';
+      display: block;
+      width: 3px;
+      height: 14px;
+      background: linear-gradient(180deg, #6C8CD5 0%, #3A5FCD 100%);
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+    /* Метки и текст – никаких hover-эффектов */
+    #controlPanel label,
+    #controlPanel p {
+      font-size: 0.8em;
+      color: rgba(255,255,255,0.85);
+      margin: 6px 0 3px;
+    }
+    /* Единый стиль для полей ввода, выпадающих меню и кнопок */
+    #controlPanel input,
+    #controlPanel select,
+    #controlPanel button {
+      margin: 3px 0;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 0.8em;
+      padding: 6px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      transition: background 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    /* Скрываем стандартные стрелки для числовых полей */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      appearance: textfield;
+    }
+    /* Кастомизация кнопок */
+    #controlPanel button {
+      background: linear-gradient(180deg, #4A6DA7 0%, #3A5FCD 100%);
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    #controlPanel button::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 150%;
+      height: 150%;
+      background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+      transform: translate(-50%, -50%) scale(0);
+      opacity: 0;
+      transition: all 0.5s ease;
+    }
+    #controlPanel button:hover::after {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+    /* Стиль нативного select */
+    select {
+      -webkit-appearance: none;
+         -moz-appearance: none;
+              appearance: none;
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 5px;
+      padding: 6px 10px;
+      font-size: 0.8em;
+      transition: background 0.3s ease, transform 0.3s ease;
+      background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5" viewBox="0 0 10 5"><polygon points="0,0 10,0 5,5" fill="%23fff"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    select:hover {
+      background: rgba(108,140,213,0.1);
+      transform: translateX(3px);
+    }
+    select:focus {
+      outline: none;
+      border-color: #6C8CD5;
+      box-shadow: 0 0 0 2px rgba(108,140,213,0.2);
+      transform: scale(1.02);
+    }
+    /* Стили для скроллбара */
+    ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+      transition: background-color 0.3s ease;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255, 0);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #6C8CD5;
+      border-radius: 6px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+      transition: background-color 0.3s ease;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #5c7abe;
+      border-radius: 6px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+      transition: background-color 0.3s ease;
+    }
+    ::-webkit-scrollbar-thumb:active {
+      background: #4a6da7;
+      border-radius: 6px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+      transition: background-color 0.3s ease;
+    }
+    .icon-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin: 6px 0;
+      opacity: 0.8;
+      transition: all 0.3s ease;
+    }
+    .icon {
+      width: 18px;
+      height: 18px;
+      filter: invert(1);
+      opacity: 0.8;
+      transition: all 0.3s ease;
+    }
+    /* Стили для блока с информацией режима Астронома */
+    #astronomistInfo {
+      position: absolute;
+      background: rgba(20,20,30,0.95);
+      padding: 8px;
+      border-radius: 5px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      pointer-events: none;
+      z-index: 20;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      transition: opacity 0.3s ease;
+      opacity: 0;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <div id="controlPanel">
+    <h3><span class="icon">🚀</span>Create Object</h3>
+    <form id="createObjectForm">
+      <label for="objectType">Type:</label>
+      <select id="objectType" required>
+        <option value="planet">Planet</option>
+        <option value="star">Star</option>
+        <option value="asteroid">Asteroid</option>
+        <option value="comet">Comet</option>
+        <option value="blackhole">Black Hole</option>
+      </select>
+      <label for="posX">X Position:</label>
+      <input type="number" id="posX" value="300" required>
+      <label for="posY">Y Position:</label>
+      <input type="number" id="posY" value="300" required>
+      <label for="velX">Velocity X:</label>
+      <input type="number" id="velX" value="0" required>
+      <label for="velY">Velocity Y:</label>
+      <input type="number" id="velY" value="0" required>
+      <label for="mass">Mass:</label>
+      <input type="number" id="mass" value="20" required>
+      <label for="radius">Radius:</label>
+      <input type="number" id="radius" value="15" required>
+      <label for="color">Color:</label>
+      <input type="color" id="color" value="#FF4500" required>
+      <label for="gravityMultiplier">Gravity Multiplier:</label>
+      <input type="number" step="0.1" id="gravityMultiplier" value="1" required>
+      <button type="submit">Create</button>
+    </form>
+    <hr>
+    <h3><span class="icon">🌌</span>Background</h3>
+    <label for="bgType">Type:</label>
+    <select id="bgType">
+      <option value="none">None</option>
+      <option value="grid" selected>Grid</option>
+      <option value="stars">Stars</option>
+    </select>
+    <label for="bgColor">Color:</label>
+    <input type="color" id="bgColor" value="#000000">
+    <hr>
+    <h3><span class="icon">⏳</span>Time Control</h3>
+    <label for="timeScaleSlider">Speed: <span id="timeScaleDisplay">1.0</span></label>
+    <input type="range" id="timeScaleSlider" min="0.1" max="5" step="0.1" value="1">
+    <hr>
+    <h3>Пауза</h3>
+    <button id="pauseButton">Пауза</button>
+    <hr>
+    <h3>Орбиты</h3>
+    <button id="toggleOrbitsBtn">Выключить орбиты</button>
+    
+    <div class="icon-group">
+      <img src="camera-icon.svg" class="icon" alt="">
+      <p style="font-size:0.75em; color: rgba(255,255,255,0.7)">
+        LMB - Перетаскивание объектов<br>
+        MMB - Перемещение камеры<br>
+        RMB - Привязка камеры<br>
+        Space - Пауза
+      </p>
+    </div>
+    <hr>
+    <h3><span class="icon">🔭</span>Режим Астронома</h3>
+    <button id="astronomistBtn">Включить</button>
+  </div>
+  
+  <canvas id="simulationCanvas"></canvas>
+  <div id="astronomistInfo"></div>
+  
+<script>
+  // --- Вспомогательные функции ---
+  function hexToRgba(hex, alpha) {
+    let c;
+    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+      c = hex.substring(1).split('');
+      if (c.length === 3) { c = [c[0], c[0], c[1], c[1], c[2], c[2]]; }
+      c = '0x' + c.join('');
+      return 'rgba(' + [(c >> 16)&255, (c >> 8)&255, c & 255].join(',') + ',' + alpha + ')';
+    }
+    throw new Error('Bad Hex');
+  }
+  function hexToRGB(hex) {
+    let c;
+    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+      c = hex.substring(1);
+      if (c.length === 3) {
+        c = c.split('').map(ch => ch + ch).join('');
+      }
+      const num = parseInt(c, 16);
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    }
+    throw new Error('Bad Hex');
+  }
+  function generateAstronomicalName() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let name = '';
+    for (let i = 0; i < 2; i++) {
+      name += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    const num = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return name + '-' + num;
+  }
+  
+  // --- Настройка canvas ---
+  const canvas = document.getElementById('simulationCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  
+  // --- Фоновые настройки ---
+  let bgType = document.getElementById('bgType').value;
+  let bgColor = document.getElementById('bgColor').value;
+  document.getElementById('bgType').addEventListener('change', e => bgType = e.target.value);
+  document.getElementById('bgColor').addEventListener('change', e => bgColor = e.target.value);
+  
+  // Генерируем фиксированные звёзды для фона (их координаты нормированы от 0 до 1)
+  const fixedStars = [];
+  for (let i = 0; i < 150; i++){
+    fixedStars.push({
+      x: Math.random(),
+      y: Math.random(),
+      r: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.5 + 0.3
+    });
+  }
+  function drawBackground() {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (bgType === "grid") {
+      // --- Адаптивная сетка (аналог Blender) ---
+      const desiredPixelSpacing = 100;
+      let worldSpacing = desiredPixelSpacing / scale;
+      const exponent = Math.floor(Math.log10(worldSpacing));
+      const fraction = worldSpacing / Math.pow(10, exponent);
+      let niceFraction;
+      if (fraction < 1.5) niceFraction = 1;
+      else if (fraction < 3) niceFraction = 2;
+      else if (fraction < 7) niceFraction = 5;
+      else niceFraction = 10;
+      const majorSpacing = niceFraction * Math.pow(10, exponent);
+      const minorSpacing = majorSpacing / 5;
+      
+      let startX = camera.x - (camera.x % minorSpacing) - minorSpacing;
+      let endX = camera.x + canvas.width/scale + minorSpacing;
+      let startY = camera.y - (camera.y % minorSpacing) - minorSpacing;
+      let endY = camera.y + canvas.height/scale + minorSpacing;
+      
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 1;
+      for (let x = startX; x <= endX; x += minorSpacing) {
+        const xScreen = (x - camera.x) * scale;
+        ctx.beginPath();
+        ctx.moveTo(xScreen, 0);
+        ctx.lineTo(xScreen, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = startY; y <= endY; y += minorSpacing) {
+        const yScreen = (y - camera.y) * scale;
+        ctx.beginPath();
+        ctx.moveTo(0, yScreen);
+        ctx.lineTo(canvas.width, yScreen);
+        ctx.stroke();
+      }
+      
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1.5;
+      let startMajorX = camera.x - (camera.x % majorSpacing) - majorSpacing;
+      let endMajorX = camera.x + canvas.width/scale + majorSpacing;
+      let startMajorY = camera.y - (camera.y % majorSpacing) - majorSpacing;
+      let endMajorY = camera.y + canvas.height/scale + majorSpacing;
+      for (let x = startMajorX; x <= endMajorX; x += majorSpacing) {
+        const xScreen = (x - camera.x) * scale;
+        ctx.beginPath();
+        ctx.moveTo(xScreen, 0);
+        ctx.lineTo(xScreen, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = startMajorY; y <= endMajorY; y += majorSpacing) {
+        const yScreen = (y - camera.y) * scale;
+        ctx.beginPath();
+        ctx.moveTo(0, yScreen);
+        ctx.lineTo(canvas.width, yScreen);
+        ctx.stroke();
+      }
+      
+    } else if (bgType === "stars") {
+        fixedStars.forEach(star => {
+          const sx = star.x * canvas.width;
+          const sy = star.y * canvas.height;
+          const adjustedRadius = Math.min(Math.max(star.r, 0.5), 2);
+          ctx.fillStyle = `rgba(255,255,255,${star.alpha})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, adjustedRadius, 0, 2*Math.PI);
+          ctx.fill();
+        });
+    }
+  }
+  
+  // --- Камера и время ---
+  let camera = { x: 0, y: 0 };
+  let scale = 1;
+  let cameraFollow = null;
+  
+  let isCameraDragging = false;
+  let cameraDragStartX = 0, cameraDragStartY = 0;
+  let initialCameraX = 0, initialCameraY = 0;
+  
+  const G = 0.1;
+  let timeScale = 1;
+  const timeScaleSlider = document.getElementById("timeScaleSlider");
+  const timeScaleDisplay = document.getElementById("timeScaleDisplay");
+  timeScaleSlider.addEventListener("input", e => {
+    timeScale = parseFloat(e.target.value);
+    timeScaleDisplay.textContent = timeScale.toFixed(1);
+  });
+  
+  let paused = false;
+  const pauseButton = document.getElementById('pauseButton');
+  pauseButton.addEventListener('click', () => {
+    paused = !paused;
+    pauseButton.textContent = paused ? "Запустить" : "Пауза";
+  });
+  
+  // --- Гравитационные волны ---
+  const waves = [];
+  function spawnWave(x, y, color) {
+    waves.push({ x, y, radius: 0, alpha: 0.8, growth: 5, color });
+  }
+  function updateWaves() {
+    for (let i = waves.length - 1; i >= 0; i--) {
+      waves[i].radius += waves[i].growth * timeScale;
+      waves[i].alpha -= 0.01 * timeScale;
+      if (waves[i].alpha <= 0) waves.splice(i, 1);
+    }
+  }
+  function drawWaves() {
+    waves.forEach(w => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc((w.x - camera.x) * scale, (w.y - camera.y) * scale, w.radius * scale, 0, 2 * Math.PI);
+      ctx.strokeStyle = hexToRgba(w.color, w.alpha);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+  
+  // --- Частицы ---
+  class Particle {
+    constructor(x, y, vx, vy, life, color, size) {
+      this.x = x; this.y = y;
+      this.vx = vx; this.vy = vy;
+      this.life = life; this.maxLife = life;
+      this.color = color;
+      this.size = size;
+    }
+    update() {
+      this.x += this.vx * timeScale;
+      this.y += this.vy * timeScale;
+      this.life -= 0.02 * timeScale;
+    }
+    draw(ctx) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(this.life / this.maxLife, 0);
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.size * scale, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  const particles = [];
+  function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      particles[i].update();
+      if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+  }
+  function drawParticles() {
+    particles.forEach(p => p.draw(ctx));
+  }
+  
+  // --- Функция источников света ---
+  function getLightSources() {
+    // Источниками считаем объекты с mass >= 500
+    return planets.filter(p => p.mass >= 500);
+  }
+  
+  // --- Коллизии ---
+  function spawnCollisionParticles(x, y, color) {
+    for (let i = 0; i < 20; i++) {
+      const angle = Math.random() * 2 * Math.PI;
+      const speed = Math.random() * 2;
+      particles.push(new Particle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 1.5, color, Math.random() * 2 + 1));
+    }
+  }
+  function handleCollisions() {
+    for (let i = 0; i < planets.length; i++) {
+      for (let j = i + 1; j < planets.length; j++) {
+        const p1 = planets[i], p2 = planets[j];
+        const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        if (d < p1.radius + p2.radius) {
+          spawnCollisionParticles((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, p1.color);
+          // Простое слияние: более массивный объект поглощает меньший
+          if (p1.mass >= p2.mass) {
+            p1.mass += p2.mass;
+            p1.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
+            planets.splice(j, 1);
+            j--;
+          } else {
+            p2.mass += p1.mass;
+            p2.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
+            planets.splice(i, 1);
+            i--;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  // --- Класс планеты ---
+  class Planet {
+    constructor(x, y, vx, vy, mass, radius, color, gravityMultiplier = 1, type = "planet") {
+      this.x = x; this.y = y;
+      this.vx = vx; this.vy = vy;
+      this.mass = mass;
+      this.radius = radius;
+      this.color = color;
+      this.gravityMultiplier = gravityMultiplier;
+      this.type = type;
+      this.trail = [];
+      this.primary = null;
+      this.createdAt = Date.now();
+      this.name = generateAstronomicalName();
+      if (this.type === "planet" && Math.random() < 0.3) {
+        this.hasRing = true;
+        this.ringInner = this.radius * 1.5;
+        this.ringOuter = this.radius * 2.5;
+        this.ringTilt = 0.3 + Math.random() * 0.3;
+        this.ringColor = "rgba(200,200,200,0.6)";
+      } else {
+        this.hasRing = false;
+      }
+    }
+    update() {
+      this.x += this.vx * timeScale;
+      this.y += this.vy * timeScale;
+      this.trail.push({ x: this.x, y: this.y });
+      if (this.trail.length > 20) this.trail.shift();
+      if (this.type === "comet") {
+        for (let i = 0; i < 2; i++) {
+          const angle = Math.random() * 2 * Math.PI;
+          const speed = Math.random() * 0.5;
+          particles.push(new Particle(this.x, this.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 1.5, this.color, 2));
+        }
+      }
+    }
+    drawTrail() {
+      if (this.trail.length < 2) return;
+      const maxTrailThickness = 12;
+      const n = this.trail.length;
+      ctx.strokeStyle = 'white';
+      for (let i = 0; i < n - 1; i++) {
+        const thickness = maxTrailThickness * ((i + 1) / n);
+        ctx.lineWidth = thickness * scale;
+        ctx.beginPath();
+        const p1 = this.trail[i], p2 = this.trail[i + 1];
+        ctx.moveTo((p1.x - camera.x) * scale, (p1.y - camera.y) * scale);
+        ctx.lineTo((p2.x - camera.x) * scale, (p2.y - camera.y) * scale);
+        ctx.stroke();
+      }
+    }
+    draw() {
+  if (this.type === "star") {
+    ctx.save();
+    const starX = (this.x - camera.x) * scale;
+    const starY = (this.y - camera.y) * scale;
+    const glowRadius = this.radius * 10;
+    const gradient = ctx.createRadialGradient(starX, starY, this.radius * scale, starX, starY, glowRadius * scale);
+    gradient.addColorStop(0, hexToRgba(this.color, 0.15));
+    gradient.addColorStop(1, hexToRgba(this.color, 0));
+    ctx.beginPath();
+    ctx.arc(starX, starY, glowRadius * scale, 0, 2 * Math.PI);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.restore();
+  }
+  // Отрисовка теней для всех, кроме звёзд
+  if (this.type !== "star") {
+    const lights = getLightSources().filter(light => light !== this);
+    for (let light of lights) {
+      const dx = this.x - light.x;
+      const dy = this.y - light.y;
+      const dist = Math.hypot(dx, dy);
+      const maxShadowDistance = this.radius * 25;
+      if (dist <= maxShadowDistance && dist > 0) {
+        const normX = dx / dist;
+        const normY = dy / dist;
+        // Начало тени – передний край планеты (обращённый к источнику)
+        const startX = this.x - normX * this.radius;
+        const startY = this.y - normY * this.radius;
+        
+        const baseExtent = this.radius * 7.5;
+        const baseHeight = this.radius * 2.5;
+        const multiplier = 1 + (dist / (this.radius * 10));
+        const localShadowExtent = baseExtent * multiplier;
+        const localShadowHeight = baseHeight;
+        
+        // Интенсивность тени: чем ближе источник, тем темнее
+        const shadowIntensity = Math.min(0.8, Math.max(0.3, 1 - dist/(this.radius * 20)));
+        // Используем чёрный цвет для теней вместо тонированного
+        const shadowColor = `rgba(0,0,0,${shadowIntensity})`;
+        
+        const shadowStartX = (startX - camera.x) * scale;
+        const shadowStartY = (startY - camera.y) * scale;
+        const angle = Math.atan2(normY, normX);
+        
+        ctx.save();
+        ctx.translate(shadowStartX, shadowStartY);
+        ctx.rotate(angle);
+        const ellipseCenterX = (localShadowExtent * scale) / 2;
+        const ellipseRadiusX = (localShadowExtent * scale) / 2;
+        const ellipseRadiusY = localShadowHeight * scale;
+        
+        let gradient = ctx.createLinearGradient(0, 0, localShadowExtent * scale, 0);
+        gradient.addColorStop(0, shadowColor);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = gradient;
+        
+        ctx.beginPath();
+        ctx.ellipse(ellipseCenterX, 0, ellipseRadiusX, ellipseRadiusY, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+      
+      this.drawTrail();
+      if (this.type === "planet" && this.mass > 50) {
+        ctx.save();
+        const grad = ctx.createRadialGradient((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale, (this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale * 2);
+        grad.addColorStop(0, hexToRgba(this.color, 0.2));
+        grad.addColorStop(1, hexToRgba(this.color, 0));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale * 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale, 0, 2 * Math.PI);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      if (this.hasRing) {
+        ctx.save();
+        ctx.translate((this.x - camera.x) * scale, (this.y - camera.y) * scale);
+        ctx.rotate(this.ringTilt);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.ringOuter * scale, this.ringOuter * scale * 0.3, 0, 0, 2 * Math.PI);
+        ctx.strokeStyle = this.ringColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (this.type === "blackhole") {
+        ctx.beginPath();
+        ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * 1.2 * scale, 0, 2 * Math.PI);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        const grad = ctx.createRadialGradient((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale, (this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * 2 * scale);
+        grad.addColorStop(0, "rgba(255,255,255,0.2)");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * 2 * scale, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+  }
+  
+  let planets = [];
+  function addPlanets() {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    planets.push(new Planet(centerX, centerY, 0, 0, 1000, 30, "#FFFF00", 1, "star"));
+    planets.push(new Planet(centerX - 300, centerY, 0, 0.6, 20, 15, "#FF4500", 1, "planet"));
+  }
+  
+  // --- Назначение родительских объектов (для орбит) ---
+  function assignParents() {
+    planets.forEach(p => {
+      if (p.type === "star") {
+        p.primary = null;
+        return;
+      }
+      let bestParent = null;
+      let bestDist = Infinity;
+      for (let candidate of planets) {
+        if (candidate === p) continue;
+        if (candidate.mass <= p.mass) continue;
+        const d = Math.hypot(p.x - candidate.x, p.y - candidate.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestParent = candidate;
+        }
+      }
+      if (bestParent) {
+        const dx = p.x - bestParent.x;
+        const dy = p.y - bestParent.y;
+        const r = Math.hypot(dx, dy);
+        const vx = p.vx - bestParent.vx;
+        const vy = p.vy - bestParent.vy;
+        const v = Math.hypot(vx, vy);
+        const E = (v * v) / 2 - (G * bestParent.mass) / r;
+        if (E < 0) {
+          p.primary = bestParent;
+          if (p.type !== "satellite") p.type = "satellite";
+        } else {
+          p.primary = null;
+        }
+      } else {
+        p.primary = null;
+      }
+    });
+  }
+  
+  // --- Отрисовка орбит ---
+  let showOrbits = true;
+  const toggleOrbitsBtn = document.getElementById('toggleOrbitsBtn');
+  toggleOrbitsBtn.addEventListener('click', () => {
+    showOrbits = !showOrbits;
+    toggleOrbitsBtn.textContent = showOrbits ? "Выключить орбиты" : "Включить орбиты";
+  });
+  function drawOrbits() {
+    planets.forEach(p => {
+      if (!p.primary) return;
+      const center = p.primary;
+      if (p === center) return;
+      const rx = p.x - center.x;
+      const ry = p.y - center.y;
+      const r = Math.hypot(rx, ry);
+      const vx = p.vx - center.vx;
+      const vy = p.vy - center.vy;
+      const v = Math.hypot(vx, vy);
+      const E = (v * v) / 2 - (G * center.mass) / r;
+      if (E >= 0) return;
+      const a = - (G * center.mass) / (2 * E);
+      const dot = rx * vx + ry * vy;
+      const factor = (v * v - (G * center.mass) / r);
+      const ex = (factor * rx - dot * vx) / (G * center.mass);
+      const ey = (factor * ry - dot * vy) / (G * center.mass);
+      const e = Math.hypot(ex, ey);
+      const b = Math.abs(a) * Math.sqrt(1 - e * e);
+      const ω = Math.atan2(ey, ex);
+      const cx = center.x - a * e * Math.cos(ω);
+      const cy = center.y - a * e * Math.sin(ω);
+      ctx.beginPath();
+      ctx.ellipse((cx - camera.x) * scale, (cy - camera.y) * scale, Math.abs(a) * scale, b * scale, ω, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+  }
+  
+  // --- Редактор планет ---
+  function openPlanetEditor(planet, clientX, clientY) {
+    let editor = document.getElementById("planetEditor");
+    if (!editor) {
+      editor = document.createElement("div");
+      editor.id = "planetEditor";
+      editor.style.position = "absolute";
+      editor.style.background = "rgba(20,20,30,0.95)";
+      editor.style.padding = "12px";
+      editor.style.borderRadius = "8px";
+      editor.style.fontFamily = "'Segoe UI', system-ui, sans-serif";
+      editor.style.zIndex = 100;
+      editor.style.boxShadow = "0 8px 32px rgba(0,0,0,0.3)";
+      editor.style.backdropFilter = "blur(10px)";
+      editor.style.border = "2px solid rgba(255,255,255,0.1)";
+      document.body.appendChild(editor);
+    }
+    editor.innerHTML = `
+      <h3 style="margin:0 0 10px 0; font-size:1em; color:#fff;">Редактор: ${planet.name}</h3>
+      <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Масса:</label>
+      <input type="number" id="editMass" value="${planet.mass}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+      <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Радиус:</label>
+      <input type="number" id="editRadius" value="${planet.radius}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+      <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Цвет:</label>
+      <input type="color" id="editColor" value="${planet.color}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+      <button id="savePlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:linear-gradient(180deg, #4A6DA7 0%, #3A5FCD 100%); color:#fff;">Сохранить</button>
+      <button id="cancelPlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:rgba(255,0,0,0.6); color:#fff;">Отмена</button>
+    `;
+    editor.style.left = clientX + "px";
+    editor.style.top = clientY + "px";
+    editor.style.display = "block";
+    
+    document.getElementById("savePlanetBtn").onclick = function() {
+      planet.mass = parseFloat(document.getElementById("editMass").value);
+      planet.radius = parseFloat(document.getElementById("editRadius").value);
+      planet.color = document.getElementById("editColor").value;
+      editor.style.display = "none";
+    };
+    document.getElementById("cancelPlanetBtn").onclick = function() {
+      editor.style.display = "none";
+    };
+  }
+  
+  // --- Обработчик ПКМ на canvas ---
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = mouseX / scale + camera.x;
+    const worldY = mouseY / scale + camera.y;
+    
+    if (astronomistMode) {
+      let clickedPlanet = null;
+      for (let planet of planets) {
+        if (Math.hypot(worldX - planet.x, worldY - planet.y) < planet.radius) {
+          clickedPlanet = planet;
+          break;
+        }
+      }
+      if (clickedPlanet) {
+        openPlanetEditor(clickedPlanet, e.clientX, e.clientY);
+        return;
+      }
+    } else {
+      for (let planet of planets) {
+        if (Math.hypot(worldX - planet.x, worldY - planet.y) < planet.radius) {
+          cameraFollow = planet;
+          return;
+        }
+      }
+      cameraFollow = null;
+    }
+  });
+  
+  // --- Обработчики перетаскивания, зума и клавиш ---
+  let draggingPlanet = null;
+  let dragOffsetX = 0, dragOffsetY = 0, lastDragX = 0, lastDragY = 0;
+  let dragDeltaX = 0, dragDeltaY = 0;
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const worldX = mouseX / scale + camera.x;
+      const worldY = mouseY / scale + camera.y;
+      for (let planet of planets) {
+        if (Math.hypot(worldX - planet.x, worldY - planet.y) < planet.radius) {
+          draggingPlanet = planet;
+          dragOffsetX = worldX - planet.x;
+          dragOffsetY = worldY - planet.y;
+          lastDragX = planet.x;
+          lastDragY = planet.y;
+          dragDeltaX = 0;
+          dragDeltaY = 0;
+          break;
+        }
+      }
+    }
+  });
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = mouseX / scale + camera.x;
+    const worldY = mouseY / scale + camera.y;
+    if (draggingPlanet) {
+      const newX = worldX - dragOffsetX;
+      const newY = worldY - dragOffsetY;
+      dragDeltaX = newX - lastDragX;
+      dragDeltaY = newY - lastDragY;
+      draggingPlanet.x = newX;
+      draggingPlanet.y = newY;
+      lastDragX = newX;
+      lastDragY = newY;
+      draggingPlanet.vx = 0;
+      draggingPlanet.vy = 0;
+    }
+    if (isCameraDragging) {
+      const dx = e.clientX - cameraDragStartX;
+      const dy = e.clientY - cameraDragStartY;
+      camera.x = initialCameraX - dx / scale;
+      camera.y = initialCameraY - dy / scale;
+    }
+  });
+  canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 0 && draggingPlanet) {
+      const threshold = 0.5;
+      if (Math.abs(dragDeltaX) < threshold && Math.abs(dragDeltaY) < threshold) {
+        draggingPlanet.vx = 0;
+        draggingPlanet.vy = 0;
+      } else {
+        draggingPlanet.vx = dragDeltaX;
+        draggingPlanet.vy = dragDeltaY;
+      }
+      draggingPlanet = null;
+    }
+    if (e.button === 1) { isCameraDragging = false; }
+  });
+  canvas.addEventListener('mouseleave', () => {
+    if (draggingPlanet) {
+      draggingPlanet.vx = dragDeltaX;
+      draggingPlanet.vy = dragDeltaY;
+      draggingPlanet = null;
+    }
+    isCameraDragging = false;
+  });
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1) {
+      if (cameraFollow) cameraFollow = null;
+      isCameraDragging = true;
+      cameraDragStartX = e.clientX;
+      cameraDragStartY = e.clientY;
+      initialCameraX = camera.x;
+      initialCameraY = camera.y;
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = camera.x + mouseX / scale;
+    const worldY = camera.y + mouseY / scale;
+    const zoomAmount = Math.exp(-e.deltaY * 0.001);
+    scale *= zoomAmount;
+    if (!cameraFollow) {
+      camera.x = worldX - mouseX / scale;
+      camera.y = worldY - mouseY / scale;
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '+' || e.key === '=') {
+      timeScale *= 1.1;
+    } else if (e.key === '-') {
+      timeScale /= 1.1;
+    } else if (e.key === '0') {
+      timeScale = 1;
+    } else if (e.key === " ") {
+      paused = !paused;
+      pauseButton.textContent = paused ? "Запустить" : "Пауза";
+    }
+  });
+  
+  // --- Обновление симуляции ---
+  function updateSimulation() {
+    assignParents();
+    for (let i = 0; i < planets.length; i++) {
+      const p1 = planets[i];
+      let ax = 0, ay = 0;
+      for (let j = 0; j < planets.length; j++) {
+        if (i === j) continue;
+        const p2 = planets[j];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        let distSq = dx * dx + dy * dy;
+        let distance = Math.sqrt(distSq);
+        if (distance < 1) distance = 1;
+        const force = G * p2.mass * p2.gravityMultiplier / distSq;
+        ax += force * (dx / distance);
+        ay += force * (dy / distance);
+      }
+      if (p1 !== draggingPlanet) {
+        p1.vx += ax * timeScale;
+        p1.vy += ay * timeScale;
+      }
+    }
+    planets.forEach(planet => planet.update());
+    handleCollisions();
+    updateParticles();
+    updateWaves();
+  }
+  
+  function drawSimulation() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    if (showOrbits) drawOrbits();
+    planets.forEach(planet => planet.draw());
+    drawParticles();
+    drawWaves();
+  }
+  
+  function animate() {
+    if (!paused) {
+      updateSimulation();
+      if (cameraFollow) {
+        camera.x = cameraFollow.x - canvas.width / (2 * scale);
+        camera.y = cameraFollow.y - canvas.height / (2 * scale);
+      }
+    }
+    drawSimulation();
+    requestAnimationFrame(animate);
+  }
+  
+  addPlanets();
+  animate();
+  
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+  
+  const createObjectForm = document.getElementById('createObjectForm');
+  createObjectForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const type = document.getElementById('objectType').value;
+    let posX = parseFloat(document.getElementById('posX').value);
+    let posY = parseFloat(document.getElementById('posY').value);
+    let velX = parseFloat(document.getElementById('velX').value);
+    let velY = parseFloat(document.getElementById('velY').value);
+    let mass = parseFloat(document.getElementById('mass').value);
+    let radius = parseFloat(document.getElementById('radius').value);
+    let gravityMultiplier = parseFloat(document.getElementById('gravityMultiplier').value);
+    
+    switch (type) {
+      case "star":
+        if (mass < 500) mass = 500;
+        if (radius < 20) radius = 20;
+        break;
+      case "asteroid":
+        if (mass > 10) mass = 10;
+        if (radius > 8) radius = 8;
+        break;
+      case "comet":
+        if (mass > 15) mass = 15;
+        if (radius > 10) radius = 10;
+        break;
+      case "blackhole":
+        mass = Math.max(mass, 2000);
+        radius = Math.max(radius, 40);
+        break;
+    }
+    const color = document.getElementById('color').value;
+    const newObj = new Planet(posX, posY, velX, velY, mass, radius, color, gravityMultiplier, type);
+    planets.push(newObj);
+  });
+  
+  // --- Функционал режима астронома ---
+  const astronomistBtn = document.getElementById('astronomistBtn');
+  const astronomistInfo = document.getElementById('astronomistInfo');
+  let astronomistMode = false;
+  
+  astronomistBtn.addEventListener('click', () => {
+    astronomistMode = !astronomistMode;
+    astronomistBtn.textContent = astronomistMode ? "Выключить" : "Включить";
+    if (!astronomistMode) {
+      astronomistInfo.style.opacity = 0;
+    }
+  });
+  
+  canvas.addEventListener('mousemove', (e) => {
+    if (!astronomistMode) {
+      astronomistInfo.style.opacity = 0;
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const worldX = mouseX / scale + camera.x;
+    const worldY = mouseY / scale + camera.y;
+    
+    let hoveredPlanet = null;
+    for (let planet of planets) {
+      const dx = worldX - planet.x;
+      const dy = worldY - planet.y;
+      if (Math.hypot(dx, dy) < planet.radius) {
+        hoveredPlanet = planet;
+        break;
+      }
+    }
+    
+    if (hoveredPlanet) {
+      const ageSeconds = ((Date.now() - hoveredPlanet.createdAt) / 1000).toFixed(1);
+      const speed = Math.hypot(hoveredPlanet.vx, hoveredPlanet.vy).toFixed(2);
+      let angleDeg = (Math.atan2(hoveredPlanet.vy, hoveredPlanet.vx) * 180 / Math.PI).toFixed(1);
+      if (angleDeg < 0) angleDeg = (parseFloat(angleDeg) + 360).toFixed(1);
+      
+      let relation = "";
+      if (hoveredPlanet.primary) {
+        relation = "Родительское тело: " + hoveredPlanet.primary.name;
+      } else {
+        const children = planets.filter(p => p.primary === hoveredPlanet);
+        relation = children.length > 0 ? "Дочерние тела: " + children.map(p => p.name).join(", ") : "Нет родительского/дочернего тела";
+      }
+      
+      astronomistInfo.innerHTML = `<strong>${hoveredPlanet.name}</strong><br>
+          Возраст: ${ageSeconds} с<br>
+          ${relation}<br>
+          Скорость: ${speed} | Направление: ${angleDeg}°`;
+      astronomistInfo.style.left = (e.clientX + 10) + 'px';
+      astronomistInfo.style.top = (e.clientY + 10) + 'px';
+      astronomistInfo.style.opacity = 1;
+    } else {
+      astronomistInfo.style.opacity = 0;
+    }
+  });
+</script>
+
+</body>
+</html>
