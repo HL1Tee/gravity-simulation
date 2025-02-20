@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- Добавлен для корректного отображения на мобильных устройствах -->
+  <!-- Для корректного отображения на мобильных устройствах -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Extended Gravity Simulation</title>
   <style>
@@ -29,7 +29,7 @@
       font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Добавляем поддержку касаний */
+    /* Поддержка касаний */
     canvas { 
       display: block; 
       transition: filter 0.8s cubic-bezier(0.19, 1, 0.22, 1);
@@ -74,13 +74,41 @@
       }
     }
 
-    #controlPanel:hover {
-      box-shadow: var(--shadow-strong);
-      border-color: rgba(108, 140, 213, 0.25);
-      transform: translateX(2px) scale(1.01);
+    /* Класс скрытия – панель сдвигается за край экрана */
+    #controlPanel.hidden {
+      transform: translateX(calc(-100% - 20px));
+      opacity: 0;
     }
 
-    /* Section Headers */
+    @media (max-width: 768px) {
+      #controlPanel {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+        top: 10px;
+        bottom: auto;
+      }
+    }
+
+    /* Кнопка-переключатель */
+    #menuToggleBtn {
+      position: fixed;
+      top: 10px;
+      left: calc(10px + 250px + 10px);
+      z-index: 100;
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    #menuToggleBtn:hover {
+      background: rgba(23,24,38,0.8);
+    }
+
+    /* Остальные стили из исходного файла */
     #controlPanel h3 {
       margin: 16px 0 12px 0;
       font-size: 1.05em;
@@ -92,11 +120,9 @@
       position: relative;
       padding-bottom: 8px;
     }
-
     #controlPanel h3:first-of-type {
       margin-top: 0;
     }
-
     #controlPanel h3::before {
       content: '';
       display: block;
@@ -106,7 +132,6 @@
       border-radius: 2px;
       transition: all 0.3s ease;
     }
-
     #controlPanel h3::after {
       content: '';
       position: absolute;
@@ -116,8 +141,6 @@
       height: 1px;
       background: linear-gradient(to right, rgba(108, 140, 213, 0.3), transparent);
     }
-
-    /* Labels and Text */
     #controlPanel label,
     #controlPanel p {
       font-size: 0.85em;
@@ -125,8 +148,6 @@
       margin: 8px 0 4px;
       transition: color 0.3s ease;
     }
-
-    /* Input Fields, Selects, and Buttons */
     #controlPanel input,
     #controlPanel select,
     #controlPanel button {
@@ -141,13 +162,11 @@
       color: var(--text-primary);
       transition: var(--transition-smooth);
     }
-
     #controlPanel input:hover,
     #controlPanel select:hover {
       background: rgba(108, 140, 213, 0.1);
       border-color: rgba(108, 140, 213, 0.4);
     }
-
     #controlPanel input:focus,
     #controlPanel select:focus {
       outline: none;
@@ -155,19 +174,14 @@
       box-shadow: 0 0 0 2px rgba(108,140,213,0.2);
       background: rgba(108, 140, 213, 0.05);
     }
-
-    /* Hide default number input spinners */
     input[type="number"]::-webkit-inner-spin-button,
     input[type="number"]::-webkit-outer-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
-
     input[type="number"] {
       appearance: textfield;
     }
-
-    /* Button Styling */
     #controlPanel button {
       background: linear-gradient(180deg, #4A6DA7 0%, #3A5FCD 100%);
       border: none;
@@ -178,7 +192,6 @@
       text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
       letter-spacing: 0.05em;
     }
-
     #controlPanel button::after {
       content: '';
       position: absolute;
@@ -191,23 +204,18 @@
       opacity: 0;
       transition: all 0.5s ease;
     }
-
     #controlPanel button:hover {
       transform: translateY(-2px);
       box-shadow: var(--glow-accent);
     }
-
     #controlPanel button:hover::after {
       transform: translate(-50%, -50%) scale(1);
       opacity: 1;
     }
-
     #controlPanel button:active {
       transform: translateY(1px);
       box-shadow: 0 0 5px rgba(108, 140, 213, 0.4);
     }
-
-    /* Select Styling */
     select {
       -webkit-appearance: none;
       -moz-appearance: none;
@@ -218,32 +226,25 @@
       background-size: 10px;
       padding-right: 30px;
     }
-
     select:hover {
       transform: translateX(2px);
     }
-
     select:focus {
       transform: scale(1.02);
     }
-
-    /* Force dark dropdown background */
     select,
     select option {
       background-color: #0c0d15 !important;
       color: #fff !important;
     }
-
-    /* Custom Sliders */
     input[type="range"] {
-      -webkit-appearance: none;
+      appearance: none;
       height: 5px;
       background: rgba(255, 255, 255, 0.15);
       border-radius: 5px;
       margin: 10px 0;
       cursor: pointer;
     }
-
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       width: 15px;
@@ -254,17 +255,14 @@
       transition: all 0.2s ease;
       box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
     }
-
     input[type="range"]::-webkit-slider-thumb:hover {
       background: var(--accent-secondary);
       transform: scale(1.2);
       box-shadow: 0 0 10px rgba(108, 140, 213, 0.5);
     }
-
     input[type="range"]:focus {
       outline: none;
     }
-
     input[type="range"]::-moz-range-thumb {
       width: 15px;
       height: 15px;
@@ -275,13 +273,11 @@
       transition: all 0.2s ease;
       box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
     }
-
     input[type="range"]::-moz-range-thumb:hover {
       background: var(--accent-secondary);
       transform: scale(1.2);
       box-shadow: 0 0 10px rgba(108, 140, 213, 0.5);
     }
-
     input[type="color"] {
       appearance: none;
       border: none;
@@ -298,20 +294,16 @@
       padding: 0;
       border: none;
     }
-
-    /* Enhanced Scrollbar Styling */
     #controlPanel::-webkit-scrollbar {
       width: 6px;
       height: 6px;
       transition: all 0.4s ease;
     }
-
     #controlPanel::-webkit-scrollbar-track {
       background: transparent;
       margin: 4px 0;
       border-radius: 10px;
     }
-
     #controlPanel::-webkit-scrollbar-thumb {
       background: rgba(108, 140, 213, 0.3);
       border-radius: 10px;
@@ -319,38 +311,29 @@
       border: 1px solid transparent;
       background-clip: padding-box;
     }
-
     #controlPanel::-webkit-scrollbar-thumb:hover {
       background: rgba(108, 140, 213, 0.6);
     }
-
     #controlPanel::-webkit-scrollbar-thumb:active {
       background: var(--accent-primary);
     }
-
     #controlPanel::-webkit-scrollbar-corner {
       background: transparent;
     }
-
     #controlPanel:hover::-webkit-scrollbar-thumb {
       background: rgba(108, 140, 213, 0.5);
       box-shadow: 0 0 4px rgba(108, 140, 213, 0.3);
     }
-
     #controlPanel:hover::-webkit-scrollbar-thumb:hover {
       background: rgba(108, 140, 213, 0.8);
       box-shadow: 0 0 8px rgba(108, 140, 213, 0.4);
     }
-
     #controlPanel:hover::-webkit-scrollbar-track {
       background: rgba(255, 255, 255, 0.03);
     }
-
     html {
       scroll-behavior: smooth;
     }
-
-    /* Icon Groups */
     .icon-group {
       display: flex;
       gap: 8px;
@@ -359,12 +342,10 @@
       opacity: 0.85;
       transition: all 0.3s ease;
     }
-
     .icon-group:hover {
       opacity: 1;
       transform: translateX(3px);
     }
-
     .icon {
       width: 18px;
       height: 18px;
@@ -372,14 +353,11 @@
       opacity: 0.85;
       transition: all 0.3s ease;
     }
-
     .icon-group:hover .icon {
       transform: scale(1.1);
       opacity: 1;
       filter: invert(1) drop-shadow(0 0 3px rgba(108, 140, 213, 0.6));
     }
-
-    /* Astronomer Info Panel */
     #astronomistInfo {
       position: absolute;
       background: var(--bg-panel);
@@ -398,14 +376,11 @@
       border: 1px solid var(--border-light);
       max-width: 280px;
     }
-
     #astronomistInfo.visible {
       opacity: 1;
       transform: translateY(0);
       animation: tooltipFadeIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
     }
-
-    /* Tooltip Animation */
     @keyframes tooltipFadeIn {
       from {
         opacity: 0;
@@ -416,11 +391,9 @@
         transform: translateY(0);
       }
     }
-
     .tooltip {
       position: relative;
     }
-
     .tooltip::after {
       content: attr(data-tooltip);
       position: absolute;
@@ -438,28 +411,22 @@
       box-shadow: var(--shadow-soft);
       z-index: 30;
     }
-
     .tooltip:hover::after {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-
-    /* Animation for panel sections */
     .section {
       opacity: 0;
       transform: translateY(10px);
       animation: sectionFadeIn 0.5s ease forwards;
       animation-delay: calc(var(--index) * 0.1s);
     }
-
     @keyframes sectionFadeIn {
       to {
         opacity: 1;
         transform: translateY(0);
       }
     }
-
-    /* Toggle Switch */
     .toggle-switch {
       position: relative;
       display: inline-block;
@@ -467,13 +434,11 @@
       height: 20px;
       margin: 4px 0 8px;
     }
-
     .toggle-switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
-
     .toggle-slider {
       position: absolute;
       cursor: pointer;
@@ -485,7 +450,6 @@
       transition: .4s;
       border-radius: 20px;
     }
-
     .toggle-slider:before {
       position: absolute;
       content: "";
@@ -497,20 +461,15 @@
       transition: .4s;
       border-radius: 50%;
     }
-
     input:checked + .toggle-slider {
       background-color: var(--accent-primary);
     }
-
     input:focus + .toggle-slider {
       box-shadow: 0 0 2px var(--accent-primary);
     }
-
     input:checked + .toggle-slider:before {
       transform: translateX(20px);
     }
-
-    /* Action Buttons with Icons */
     .action-button {
       display: flex;
       align-items: center;
@@ -528,27 +487,21 @@
       position: relative;
       text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
     }
-
     .action-button .icon {
       width: 16px;
       height: 16px;
       transition: transform 0.3s ease;
     }
-
     .action-button:hover {
       transform: translateY(-2px);
       box-shadow: var(--glow-accent);
     }
-
     .action-button:hover .icon {
       transform: scale(1.1);
     }
-
     .action-button:active {
       transform: translateY(1px);
     }
-
-    /* Notification Badge */
     .badge {
       position: absolute;
       top: -5px;
@@ -563,14 +516,11 @@
       transform-origin: center;
       animation: badgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
     }
-
     @keyframes badgePop {
       to {
         transform: scale(1);
       }
     }
-
-    /* Panel Collapse/Expand */
     .panel-toggle {
       position: absolute;
       top: 10px;
@@ -586,47 +536,33 @@
       justify-content: center;
       transition: all 0.3s ease;
     }
-
     .panel-toggle:hover {
       background: rgba(255, 255, 255, 0.1);
       color: var(--text-primary);
     }
-
     .panel-toggle i {
       font-size: 1.2em;
       transition: transform 0.3s ease;
     }
-
     .panel-collapsed .panel-toggle i {
       transform: rotate(180deg);
     }
-
     .panel-collapsed {
       max-height: 40px;
       overflow: hidden;
     }
-
-    /* Additional fix for debug checkbox styling */
     #debugModeCheckbox {
       cursor: pointer;
       margin-right: 6px;
       transform: scale(1.1);
       accent-color: var(--accent-primary);
     }
-
-    /* Media Query для адаптации панели управления на мобильных устройствах */
-    @media (max-width: 768px) {
-      #controlPanel {
-        max-width: 90%;
-        left: 5%;
-        right: 5%;
-        top: 10px;
-        bottom: auto;
-      }
-    }
   </style>
 </head>
 <body>
+  <!-- Кнопка для скрытия/отображения меню -->
+  <button id="menuToggleBtn">&lt;</button>
+  
   <div id="controlPanel">
     <h3><span class="icon">🚀</span>Create Object</h3>
     <form id="createObjectForm">
@@ -762,7 +698,6 @@
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       if (bgType === "grid") {
-        // Adaptive Grid
         const desiredPixelSpacing = 100;
         let worldSpacing = desiredPixelSpacing / scale;
         const exponent = Math.floor(Math.log10(worldSpacing));
@@ -842,7 +777,6 @@
     let cameraDragStartX = 0, cameraDragStartY = 0;
     let initialCameraX = 0, initialCameraY = 0;
 
-    // Gravitational constant (adjustable)
     let G = 0.1;
     const gSlider = document.getElementById("gSlider");
     const gDisplay = document.getElementById("gDisplay");
@@ -1026,7 +960,6 @@
         this.createdAt = Date.now();
         this.name = generateAstronomicalName();
 
-        // Random rings for some planets
         if (this.type === "planet" && Math.random() < 0.3) {
           this.hasRing = true;
           this.ringInner = this.radius * 1.5;
@@ -1042,8 +975,6 @@
         this.y += this.vy * timeScale;
         this.trail.push({ x: this.x, y: this.y });
         if (this.trail.length > 20) this.trail.shift();
-
-        // Comet effect
         if (this.type === "comet") {
           for (let i = 0; i < 2; i++) {
             const angle = Math.random() * 2 * Math.PI;
@@ -1068,7 +999,6 @@
         }
       }
       draw() {
-        // Star glow
         if (this.type === "star") {
           ctx.save();
           const starX = (this.x - camera.x) * scale;
@@ -1084,7 +1014,6 @@
           ctx.restore();
         }
 
-        // Shadows if there's a star
         if (this.type !== "star") {
           const lights = getLightSources().filter(light => light !== this);
           for (let light of lights) {
@@ -1130,7 +1059,6 @@
 
         this.drawTrail();
 
-        // Additional glow for large planets
         if (this.type === "planet" && this.mass > 50) {
           ctx.save();
           const grad = ctx.createRadialGradient(
@@ -1156,13 +1084,11 @@
           ctx.restore();
         }
 
-        // Main body
         ctx.beginPath();
         ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale, 0, 2 * Math.PI);
         ctx.fillStyle = this.color;
         ctx.fill();
 
-        // Rings
         if (this.hasRing) {
           ctx.save();
           ctx.translate((this.x - camera.x) * scale, (this.y - camera.y) * scale);
@@ -1175,7 +1101,6 @@
           ctx.restore();
         }
 
-        // Black Hole effect
         if (this.type === "blackhole") {
           ctx.beginPath();
           ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * 1.2 * scale, 0, 2 * Math.PI);
@@ -1204,12 +1129,10 @@
     function addPlanets() {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-      // Star + one planet example
       planets.push(new Planet(centerX, centerY, 0, 0, 1000, 30, "#FFFF00", 1, "star"));
       planets.push(new Planet(centerX - 300, centerY, 0, 0.6, 20, 15, "#FF4500", 1, "planet"));
     }
 
-    // --- Assign parents (for orbits) ---
     function assignParents() {
       planets.forEach(p => {
         if (p.type === "star") {
@@ -1247,7 +1170,6 @@
       });
     }
 
-    // --- Draw orbits ---
     let showOrbits = true;
     const toggleOrbitsBtn = document.getElementById('toggleOrbitsBtn');
     toggleOrbitsBtn.addEventListener('click', () => {
@@ -1285,7 +1207,6 @@
       });
     }
 
-    // --- Planet Editor (on right-click in Astronomer mode) ---
     function openPlanetEditor(planet, clientX, clientY) {
       let editor = document.getElementById("planetEditor");
       if (!editor) {
@@ -1328,7 +1249,6 @@
       };
     }
 
-    // --- Right-click on canvas ---
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -1350,7 +1270,6 @@
           return;
         }
       } else {
-        // Normal mode: right-click sets camera follow
         for (let planet of planets) {
           if (Math.hypot(worldX - planet.x, worldY - planet.y) < planet.radius) {
             cameraFollow = planet;
@@ -1361,7 +1280,6 @@
       }
     });
 
-    // --- Dragging, Zoom, and Keyboard ---
     let draggingPlanet = null;
     let dragOffsetX = 0, dragOffsetY = 0, lastDragX = 0, lastDragY = 0;
     let dragDeltaX = 0, dragDeltaY = 0;
@@ -1401,7 +1319,6 @@
         draggingPlanet.y = newY;
         lastDragX = newX;
         lastDragY = newY;
-        // Zero velocity while dragging
         draggingPlanet.vx = 0;
         draggingPlanet.vy = 0;
       }
@@ -1577,13 +1494,11 @@
       }
     });
 
-    // --- Debug Mode ---
     let debugMode = false;
     document.getElementById("debugModeCheckbox").addEventListener('change', (e) => {
       debugMode = e.target.checked;
     });
 
-    // --- Simulation Update ---
     function updateSimulation() {
       assignParents();
       for (let i = 0; i < planets.length; i++) {
@@ -1614,7 +1529,6 @@
     }
 
     function drawSimulation() {
-      // Slight motion-blur effect
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1625,7 +1539,6 @@
       drawWaves();
       drawCollisionEffects();
 
-      // Debug info
       if(debugMode){
         planets.forEach(planet => {
           const speed = Math.hypot(planet.vx, planet.vy);
@@ -1651,7 +1564,6 @@
           targetCamera.y = cameraFollow.y - canvas.height / (2 * targetScale);
         }
       }
-      // Smooth camera interpolation
       const followFactor = cameraFollow ? 0.3 : 0.1;
       camera.x += (targetCamera.x - camera.x) * followFactor;
       camera.y += (targetCamera.y - camera.y) * followFactor;
@@ -1669,7 +1581,6 @@
       canvas.height = window.innerHeight;
     });
 
-    // --- Object Creation ---
     const createObjectForm = document.getElementById('createObjectForm');
     createObjectForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1708,7 +1619,6 @@
       planets.push(newObj);
     });
 
-    // --- Astronomer Mode ---
     const astronomistBtn = document.getElementById('astronomistBtn');
     const astronomistInfo = document.getElementById('astronomistInfo');
     let astronomistMode = false;
@@ -1770,7 +1680,6 @@
       }
     });
 
-    // --- Save/Load State ---
     const saveStateBtn = document.getElementById('saveStateBtn');
     const loadStateBtn = document.getElementById('loadStateBtn');
 
@@ -1844,6 +1753,100 @@
       document.getElementById("debugModeCheckbox").checked = debugMode;
 
       alert('State loaded successfully!');
+    });
+
+    // --- Кнопка для скрытия/отображения меню ---
+    const menuToggleBtn = document.getElementById('menuToggleBtn');
+    const controlPanel = document.getElementById('controlPanel');
+    menuToggleBtn.addEventListener('click', () => {
+      if (controlPanel.style.display === 'none') {
+         controlPanel.style.display = 'block';
+         menuToggleBtn.textContent = '<';
+      } else {
+         controlPanel.style.display = 'none';
+         menuToggleBtn.textContent = '>';
+      }
+    });
+
+    function updateSimulation() {
+      assignParents();
+      for (let i = 0; i < planets.length; i++) {
+        const p1 = planets[i];
+        let ax = 0, ay = 0;
+        for (let j = 0; j < planets.length; j++) {
+          if (i === j) continue;
+          const p2 = planets[j];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          let distSq = dx * dx + dy * dy;
+          let distance = Math.sqrt(distSq);
+          if (distance < 1) distance = 1;
+          const force = G * p2.mass * p2.gravityMultiplier / distSq;
+          ax += force * (dx / distance);
+          ay += force * (dy / distance);
+        }
+        if (p1 !== draggingPlanet) {
+          p1.vx += ax * timeScale;
+          p1.vy += ay * timeScale;
+        }
+      }
+      planets.forEach(planet => planet.update());
+      handleCollisions();
+      updateParticles();
+      updateWaves();
+      updateCollisionEffects();
+    }
+
+    function drawSimulation() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawBackground();
+      if (showOrbits) drawOrbits();
+      planets.forEach(planet => planet.draw());
+      drawParticles();
+      drawWaves();
+      drawCollisionEffects();
+
+      if(debugMode){
+        planets.forEach(planet => {
+          const speed = Math.hypot(planet.vx, planet.vy);
+          ctx.fillStyle = "white";
+          ctx.font = "10px sans-serif";
+          ctx.fillText(`Speed: ${speed.toFixed(2)}`, 
+            (planet.x - camera.x) * scale, 
+            (planet.y - camera.y) * scale - planet.radius * scale - 5
+          );
+          ctx.fillText(`Mass: ${planet.mass.toFixed(0)}`, 
+            (planet.x - camera.x) * scale, 
+            (planet.y - camera.y) * scale - planet.radius * scale - 15
+          );
+        });
+      }
+    }
+
+    function animate() {
+      if (!paused) {
+        updateSimulation();
+        if (cameraFollow) {
+          targetCamera.x = cameraFollow.x - canvas.width / (2 * targetScale);
+          targetCamera.y = cameraFollow.y - canvas.height / (2 * targetScale);
+        }
+      }
+      const followFactor = cameraFollow ? 0.3 : 0.1;
+      camera.x += (targetCamera.x - camera.x) * followFactor;
+      camera.y += (targetCamera.y - camera.y) * followFactor;
+      scale += (targetScale - scale) * 0.1;
+
+      drawSimulation();
+      requestAnimationFrame(animate);
+    }
+    
+    animate();
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     });
   </script>
 </body>
