@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Добавлен для корректного отображения на мобильных устройствах -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Extended Gravity Simulation</title>
   <style>
     /* Base Styles */
@@ -27,9 +29,11 @@
       font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
+    /* Добавляем поддержку касаний */
     canvas { 
       display: block; 
       transition: filter 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+      touch-action: none;
     }
 
     /* Control Panel */
@@ -609,6 +613,17 @@
       transform: scale(1.1);
       accent-color: var(--accent-primary);
     }
+
+    /* Media Query для адаптации панели управления на мобильных устройствах */
+    @media (max-width: 768px) {
+      #controlPanel {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
+        top: 10px;
+        bottom: auto;
+      }
+    }
   </style>
 </head>
 <body>
@@ -720,6 +735,12 @@
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // --- Additional Variables for Touch Support ---
+    let initialPinchDistance = 0;
+    let initialTargetScale = 1;
+    let pinchCenterX = 0, pinchCenterY = 0;
+    let pinchWorldX = 0, pinchWorldY = 0;
 
     // --- Background Settings ---
     let bgType = document.getElementById('bgType').value;
@@ -1417,7 +1438,6 @@
     });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 1) {
-        // Middle mouse for camera dragging
         if (cameraFollow) cameraFollow = null;
         isCameraDragging = true;
         cameraDragStartX = e.clientX;
@@ -1449,6 +1469,111 @@
       } else if (e.key === " ") {
         paused = !paused;
         pauseButton.textContent = paused ? "Resume" : "Pause";
+      }
+    });
+
+    // --- Touch Event Listeners for Mobile Support ---
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        const worldX = touchX / scale + camera.x;
+        const worldY = touchY / scale + camera.y;
+        let planetTouched = false;
+        for (let planet of planets) {
+          if (Math.hypot(worldX - planet.x, worldY - planet.y) < planet.radius) {
+            draggingPlanet = planet;
+            dragOffsetX = worldX - planet.x;
+            dragOffsetY = worldY - planet.y;
+            lastDragX = planet.x;
+            lastDragY = planet.y;
+            dragDeltaX = 0;
+            dragDeltaY = 0;
+            planetTouched = true;
+            break;
+          }
+        }
+        if (!planetTouched) {
+          isCameraDragging = true;
+          cameraDragStartX = touch.clientX;
+          cameraDragStartY = touch.clientY;
+          initialCameraX = targetCamera.x;
+          initialCameraY = targetCamera.y;
+        }
+      } else if (e.touches.length === 2) {
+        isCameraDragging = false;
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        initialPinchDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        initialTargetScale = targetScale;
+        pinchCenterX = (touch1.clientX + touch2.clientX) / 2;
+        pinchCenterY = (touch1.clientY + touch2.clientY) / 2;
+        const rect = canvas.getBoundingClientRect();
+        const centerX = pinchCenterX - rect.left;
+        const centerY = pinchCenterY - rect.top;
+        pinchWorldX = targetCamera.x + centerX / targetScale;
+        pinchWorldY = targetCamera.y + centerY / targetScale;
+      }
+    });
+    
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        const worldX = touchX / scale + camera.x;
+        const worldY = touchY / scale + camera.y;
+        if (draggingPlanet) {
+          const newX = worldX - dragOffsetX;
+          const newY = worldY - dragOffsetY;
+          dragDeltaX = newX - lastDragX;
+          dragDeltaY = newY - lastDragY;
+          draggingPlanet.x = newX;
+          draggingPlanet.y = newY;
+          lastDragX = newX;
+          lastDragY = newY;
+          draggingPlanet.vx = 0;
+          draggingPlanet.vy = 0;
+        } else if (isCameraDragging) {
+          const dx = touch.clientX - cameraDragStartX;
+          const dy = touch.clientY - cameraDragStartY;
+          targetCamera.x = initialCameraX - dx / targetScale;
+          targetCamera.y = initialCameraY - dy / targetScale;
+        }
+      } else if (e.touches.length === 2) {
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const currentDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        const zoomAmount = currentDistance / initialPinchDistance;
+        targetScale = initialTargetScale * zoomAmount;
+        const rect = canvas.getBoundingClientRect();
+        const centerX = pinchCenterX - rect.left;
+        const centerY = pinchCenterY - rect.top;
+        targetCamera.x = pinchWorldX - centerX / targetScale;
+        targetCamera.y = pinchWorldY - centerY / targetScale;
+      }
+    });
+    
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 0) {
+        if (draggingPlanet) {
+          const threshold = 0.5;
+          if (Math.abs(dragDeltaX) < threshold && Math.abs(dragDeltaY) < threshold) {
+            draggingPlanet.vx = 0;
+            draggingPlanet.vy = 0;
+          } else {
+            draggingPlanet.vx = dragDeltaX;
+            draggingPlanet.vy = dragDeltaY;
+          }
+          draggingPlanet = null;
+        }
+        isCameraDragging = false;
       }
     });
 
@@ -1650,7 +1775,6 @@
     const loadStateBtn = document.getElementById('loadStateBtn');
 
     saveStateBtn.addEventListener('click', () => {
-      // Create an object with all necessary data
       const state = {
         planets: planets.map(p => ({
           x: p.x,
@@ -1685,7 +1809,6 @@
       }
       const state = JSON.parse(saved);
 
-      // Clear existing planets
       planets = [];
       for (const p of state.planets) {
         const newPlanet = new Planet(
@@ -1696,7 +1819,6 @@
         planets.push(newPlanet);
       }
 
-      // Restore camera, G, timeScale, etc.
       camera.x = state.camera.x;
       camera.y = state.camera.y;
       scale = state.camera.scale;
