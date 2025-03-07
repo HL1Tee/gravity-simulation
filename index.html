@@ -672,19 +672,18 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // --- Additional Variables for Touch Support ---
-    let initialPinchDistance = 0;
-    let initialTargetScale = 1;
-    let pinchCenterX = 0, pinchCenterY = 0;
-    let pinchWorldX = 0, pinchWorldY = 0;
+    // --- Camera and Time ---
+    let camera = { x: 0, y: 0 };
+    let scale = 1;
+    let targetCamera = { x: camera.x, y: camera.y };
+    let targetScale = scale;
+    let cameraFollow = null;
 
     // --- Background Settings ---
     let bgType = document.getElementById('bgType').value;
     let bgColor = document.getElementById('bgColor').value;
     document.getElementById('bgType').addEventListener('change', e => bgType = e.target.value);
     document.getElementById('bgColor').addEventListener('change', e => bgColor = e.target.value);
-
-    // Pre-generate some fixed stars for "stars" background
     const fixedStars = [];
     for (let i = 0; i < 150; i++){
       fixedStars.push({
@@ -709,12 +708,10 @@
         else niceFraction = 10;
         const majorSpacing = niceFraction * Math.pow(10, exponent);
         const minorSpacing = majorSpacing / 5;
-
         let startX = camera.x - (camera.x % minorSpacing) - minorSpacing;
         let endX = camera.x + canvas.width/scale + minorSpacing;
         let startY = camera.y - (camera.y % minorSpacing) - minorSpacing;
         let endY = camera.y + canvas.height/scale + minorSpacing;
-
         ctx.strokeStyle = "rgba(255,255,255,0.1)";
         ctx.lineWidth = 1;
         for (let x = startX; x <= endX; x += minorSpacing) {
@@ -731,7 +728,6 @@
           ctx.lineTo(canvas.width, yScreen);
           ctx.stroke();
         }
-
         ctx.strokeStyle = "rgba(255,255,255,0.3)";
         ctx.lineWidth = 1.5;
         let startMajorX = camera.x - (camera.x % majorSpacing) - majorSpacing;
@@ -752,7 +748,6 @@
           ctx.lineTo(canvas.width, yScreen);
           ctx.stroke();
         }
-
       } else if (bgType === "stars") {
         fixedStars.forEach(star => {
           const sx = star.x * canvas.width;
@@ -766,17 +761,7 @@
       }
     }
 
-    // --- Camera and Time ---
-    let camera = { x: 0, y: 0 };
-    let scale = 1;
-    let targetCamera = { x: camera.x, y: camera.y };
-    let targetScale = scale;
-    let cameraFollow = null;
-
-    let isCameraDragging = false;
-    let cameraDragStartX = 0, cameraDragStartY = 0;
-    let initialCameraX = 0, initialCameraY = 0;
-
+    // --- Time and Physics Settings ---
     let G = 0.1;
     const gSlider = document.getElementById("gSlider");
     const gDisplay = document.getElementById("gDisplay");
@@ -784,7 +769,6 @@
       G = parseFloat(e.target.value);
       gDisplay.textContent = G;
     });
-
     let timeScale = 1;
     const timeScaleSlider = document.getElementById("timeScaleSlider");
     const timeScaleDisplay = document.getElementById("timeScaleDisplay");
@@ -792,7 +776,6 @@
       timeScale = parseFloat(e.target.value);
       timeScaleDisplay.textContent = timeScale.toFixed(1);
     });
-
     let paused = false;
     const pauseButton = document.getElementById('pauseButton');
     pauseButton.addEventListener('click', () => {
@@ -800,8 +783,81 @@
       pauseButton.textContent = paused ? "Resume" : "Pause";
     });
 
-    // --- Gravitational Waves ---
-    const waves = [];
+    // --- Массивы для объектов симуляции ---
+    let planets = [];
+    let waves = [];
+    let collisionEffects = [];
+    let gasClouds = [];
+
+    // --- Космический Газ (каждая частица ведёт себя самостоятельно) ---
+    class CosmicGas {
+      constructor(x, y, density, color) {
+        this.particles = [];
+        this.color = color;
+        this.density = density;
+        // Генерируем компактное и плотное облако
+        for (let i = 0; i < Math.round(density * 512); i++) {
+          let angle = Math.random() * Math.PI * 2;
+          let dist = Math.random() * 1;
+          this.particles.push({
+            x: x + Math.cos(angle) * dist,
+            y: y + Math.sin(angle) * dist,
+            vx: (Math.random() - 0.5) * 0.2,
+            vy: (Math.random() - 0.5) * 0.2,
+            alpha: Math.random() * 0.7 + 0.3,
+            size: Math.random() * 0.75 + 0.3,
+          });
+        }
+      }
+      update() {
+        let avgX = 0, avgY = 0, total = this.particles.length;
+        for (let p of this.particles) {
+          let ax = 0, ay = 0;
+          // Каждая частица реагирует на гравитацию планет
+          for (let planet of planets) {
+            const dx = planet.x - p.x;
+            const dy = planet.y - p.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < 1) continue;
+            const force = (G * planet.mass) / distSq;
+            const distance = Math.sqrt(distSq);
+            ax += force * (dx / distance);
+            ay += force * (dy / distance);
+          }
+          p.vx += ax * timeScale;
+          p.vy += ay * timeScale;
+          p.x += p.vx * timeScale;
+          p.y += p.vy * timeScale;
+          avgX += p.x;
+          avgY += p.y;
+        }
+        avgX /= total;
+        avgY /= total;
+        // Если облако становится слишком плотным – коллапс и образование звезды
+        if (total > 1024) {
+          let newStar = new Planet(avgX, avgY, 0, 0, total * 0.5, 8, "#FFD700", 1, "star");
+          planets.push(newStar);
+          gasClouds.splice(gasClouds.indexOf(this), 1);
+        }
+      }
+      draw(ctx) {
+        for (let p of this.particles) {
+          ctx.save();
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc((p.x - camera.x) * scale, (p.y - camera.y) * scale, p.size * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+    // Функция для создания облака газа
+    function spawnGasCloud(x, y, density, color) {
+      gasClouds.push(new CosmicGas(x, y, density, color));
+    }
+
+    // --- Волны (эффект расширяющихся кругов) ---
     function spawnWave(x, y, color) {
       waves.push({ x, y, radius: 0, alpha: 0.8, growth: 5, color });
     }
@@ -824,126 +880,50 @@
       });
     }
 
-    // --- Collision Effects ---
-    let collisionEffects = [];
+    // --- Эффекты столкновений (без партиклов) ---
     function spawnCollisionEffect(x, y) {
-       collisionEffects.push({x: x, y: y, radius: 0, alpha: 0.8, growth: 8});
+      collisionEffects.push({x: x, y: y, radius: 0, alpha: 0.8, growth: 8});
+      spawnGasCloud(x, y, 1, "rgba(200,200,255,0.3)");
     }
     function updateCollisionEffects() {
       for (let i = collisionEffects.length - 1; i >= 0; i--){
-          collisionEffects[i].radius += collisionEffects[i].growth * timeScale;
-          collisionEffects[i].alpha -= 0.02 * timeScale;
-          if(collisionEffects[i].alpha <= 0) collisionEffects.splice(i,1);
+        collisionEffects[i].radius += collisionEffects[i].growth * timeScale;
+        collisionEffects[i].alpha -= 0.02 * timeScale;
+        if(collisionEffects[i].alpha <= 0) collisionEffects.splice(i,1);
       }
     }
     function drawCollisionEffects() {
       collisionEffects.forEach(effect => {
-         ctx.save();
-         ctx.filter = "blur(2px)";
-         ctx.beginPath();
-         ctx.arc((effect.x - camera.x) * scale, (effect.y - camera.y) * scale, effect.radius * scale, 0, 2 * Math.PI);
-         ctx.strokeStyle = hexToRgba("#FFFFFF", effect.alpha);
-         ctx.lineWidth = 4;
-         ctx.stroke();
-         ctx.restore();
+        ctx.save();
+        ctx.filter = "blur(2px)";
+        ctx.beginPath();
+        ctx.arc((effect.x - camera.x) * scale, (effect.y - camera.y) * scale, effect.radius * scale, 0, 2 * Math.PI);
+        ctx.strokeStyle = hexToRgba("#FFFFFF", effect.alpha);
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
       });
     }
 
-    // --- Collision Sound ---
+    // --- Звук столкновений ---
     function playCollisionSound() {
       try {
-         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-         const oscillator = audioCtx.createOscillator();
-         const gainNode = audioCtx.createGain();
-         oscillator.connect(gainNode);
-         gainNode.connect(audioCtx.destination);
-         oscillator.type = "sine";
-         oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
-         gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-         oscillator.start();
-         oscillator.stop(audioCtx.currentTime + 0.1);
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.1);
       } catch(e) {
-         console.log("Web Audio API is not supported in this browser.");
+        console.log("Web Audio API is not supported in this browser.");
       }
     }
 
-    // --- Particles ---
-    class Particle {
-      constructor(x, y, vx, vy, life, color, size) {
-        this.x = x; this.y = y;
-        this.vx = vx; this.vy = vy;
-        this.life = life; this.maxLife = life;
-        this.color = color;
-        this.size = size;
-      }
-      update() {
-        this.x += this.vx * timeScale;
-        this.y += this.vy * timeScale;
-        this.life -= 0.02 * timeScale;
-      }
-      draw(ctx) {
-        ctx.save();
-        ctx.globalAlpha = Math.max(this.life / this.maxLife, 0);
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.size * scale, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-    const particles = [];
-    function updateParticles() {
-      for (let i = particles.length - 1; i >= 0; i--) {
-        particles[i].update();
-        if (particles[i].life <= 0) particles.splice(i, 1);
-      }
-    }
-    function drawParticles() {
-      particles.forEach(p => p.draw(ctx));
-    }
-
-    // --- Light Sources (for shadows) ---
-    function getLightSources() {
-      return planets.filter(p => p.mass >= 500);
-    }
-
-    // --- Collisions ---
-    function spawnCollisionParticles(x, y, color) {
-      for (let i = 0; i < 20; i++) {
-        const angle = Math.random() * 2 * Math.PI;
-        const speed = Math.random() * 2;
-        particles.push(new Particle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 1.5, color, Math.random() * 2 + 1));
-      }
-    }
-    function handleCollisions() {
-      for (let i = 0; i < planets.length; i++) {
-        for (let j = i + 1; j < planets.length; j++) {
-          const p1 = planets[i], p2 = planets[j];
-          const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-          if (d < p1.radius + p2.radius) {
-            const collisionX = (p1.x + p2.x) / 2;
-            const collisionY = (p1.y + p2.y) / 2;
-            spawnCollisionParticles(collisionX, collisionY, p1.color);
-            spawnCollisionEffect(collisionX, collisionY);
-            playCollisionSound();
-            if (p1.mass >= p2.mass) {
-              p1.mass += p2.mass;
-              p1.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
-              planets.splice(j, 1);
-              j--;
-            } else {
-              p2.mass += p1.mass;
-              p2.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
-              planets.splice(i, 1);
-              i--;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // --- Planet Class ---
+    // --- Класс Planet (и других объектов) ---
     class Planet {
       constructor(x, y, vx, vy, mass, radius, color, gravityMultiplier = 1, type = "planet") {
         this.x = x; 
@@ -959,7 +939,6 @@
         this.primary = null;
         this.createdAt = Date.now();
         this.name = generateAstronomicalName();
-
         if (this.type === "planet" && Math.random() < 0.3) {
           this.hasRing = true;
           this.ringInner = this.radius * 1.5;
@@ -976,11 +955,7 @@
         this.trail.push({ x: this.x, y: this.y });
         if (this.trail.length > 20) this.trail.shift();
         if (this.type === "comet") {
-          for (let i = 0; i < 2; i++) {
-            const angle = Math.random() * 2 * Math.PI;
-            const speed = Math.random() * 0.5;
-            particles.push(new Particle(this.x, this.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 1.5, this.color, 2));
-          }
+          // Дополнительное поведение для комет (если нужно)
         }
       }
       drawTrail() {
@@ -1013,9 +988,8 @@
           ctx.fill();
           ctx.restore();
         }
-
         if (this.type !== "star") {
-          const lights = getLightSources().filter(light => light !== this);
+          const lights = planets.filter(p => p.mass >= 500);
           for (let light of lights) {
             const dx = this.x - light.x;
             const dy = this.y - light.y;
@@ -1036,19 +1010,16 @@
               const shadowStartX = (startX - camera.x) * scale;
               const shadowStartY = (startY - camera.y) * scale;
               const angle = Math.atan2(normY, normX);
-
               ctx.save();
               ctx.translate(shadowStartX, shadowStartY);
               ctx.rotate(angle);
               const ellipseCenterX = (localShadowExtent * scale) / 2;
               const ellipseRadiusX = (localShadowExtent * scale) / 2;
               const ellipseRadiusY = localShadowHeight * scale;
-
               let gradient = ctx.createLinearGradient(0, 0, localShadowExtent * scale, 0);
               gradient.addColorStop(0, shadowColor);
               gradient.addColorStop(1, "rgba(0,0,0,0)");
               ctx.fillStyle = gradient;
-
               ctx.beginPath();
               ctx.ellipse(ellipseCenterX, 0, ellipseRadiusX, ellipseRadiusY, 0, 0, 2 * Math.PI);
               ctx.fill();
@@ -1056,9 +1027,7 @@
             }
           }
         }
-
         this.drawTrail();
-
         if (this.type === "planet" && this.mass > 50) {
           ctx.save();
           const grad = ctx.createRadialGradient(
@@ -1073,22 +1042,14 @@
           grad.addColorStop(1, hexToRgba(this.color, 0));
           ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(
-            (this.x - camera.x) * scale,
-            (this.y - camera.y) * scale,
-            this.radius * scale * 2,
-            0,
-            2 * Math.PI
-          );
+          ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale * 2, 0, 2 * Math.PI);
           ctx.fill();
           ctx.restore();
         }
-
         ctx.beginPath();
         ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * scale, 0, 2 * Math.PI);
         ctx.fillStyle = this.color;
         ctx.fill();
-
         if (this.hasRing) {
           ctx.save();
           ctx.translate((this.x - camera.x) * scale, (this.y - camera.y) * scale);
@@ -1100,7 +1061,6 @@
           ctx.stroke();
           ctx.restore();
         }
-
         if (this.type === "blackhole") {
           ctx.beginPath();
           ctx.arc((this.x - camera.x) * scale, (this.y - camera.y) * scale, this.radius * 1.2 * scale, 0, 2 * Math.PI);
@@ -1125,7 +1085,6 @@
       }
     }
 
-    let planets = [];
     function addPlanets() {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
@@ -1207,48 +1166,7 @@
       });
     }
 
-    function openPlanetEditor(planet, clientX, clientY) {
-      let editor = document.getElementById("planetEditor");
-      if (!editor) {
-        editor = document.createElement("div");
-        editor.id = "planetEditor";
-        editor.style.position = "absolute";
-        editor.style.background = "rgba(20,20,30,0.95)";
-        editor.style.padding = "12px";
-        editor.style.borderRadius = "8px";
-        editor.style.fontFamily = "'Segoe UI', system-ui, sans-serif";
-        editor.style.zIndex = 100;
-        editor.style.boxShadow = "0 8px 32px rgba(0,0,0,0.3)";
-        editor.style.backdropFilter = "blur(10px)";
-        editor.style.border = "2px solid rgba(255,255,255,0.1)";
-        document.body.appendChild(editor);
-      }
-      editor.innerHTML = `
-        <h3 style="margin:0 0 10px 0; font-size:1em; color:#fff;">Editing: ${planet.name}</h3>
-        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Mass:</label>
-        <input type="number" id="editMass" value="${planet.mass}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
-        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Radius:</label>
-        <input type="number" id="editRadius" value="${planet.radius}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
-        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Color:</label>
-        <input type="color" id="editColor" value="${planet.color}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
-        <button id="savePlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:linear-gradient(180deg, #4A6DA7 0%, #3A5FCD 100%); color:#fff;">Save</button>
-        <button id="cancelPlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:rgba(255,0,0,0.6); color:#fff;">Cancel</button>
-      `;
-      editor.style.left = clientX + "px";
-      editor.style.top = clientY + "px";
-      editor.style.display = "block";
-
-      document.getElementById("savePlanetBtn").onclick = function() {
-        planet.mass = parseFloat(document.getElementById("editMass").value);
-        planet.radius = parseFloat(document.getElementById("editRadius").value);
-        planet.color = document.getElementById("editColor").value;
-        editor.style.display = "none";
-      };
-      document.getElementById("cancelPlanetBtn").onclick = function() {
-        editor.style.display = "none";
-      };
-    }
-
+    // --- Обработчик ПКМ на canvas ---
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -1280,6 +1198,48 @@
       }
     });
 
+    function openPlanetEditor(planet, clientX, clientY) {
+      let editor = document.getElementById("planetEditor");
+      if (!editor) {
+        editor = document.createElement("div");
+        editor.id = "planetEditor";
+        editor.style.position = "absolute";
+        editor.style.background = "rgba(20,20,30,0.95)";
+        editor.style.padding = "12px";
+        editor.style.borderRadius = "8px";
+        editor.style.fontFamily = "'Segoe UI', system-ui, sans-serif";
+        editor.style.zIndex = 100;
+        editor.style.boxShadow = "0 8px 32px rgba(0,0,0,0.3)";
+        editor.style.backdropFilter = "blur(10px)";
+        editor.style.border = "2px solid rgba(255,255,255,0.1)";
+        document.body.appendChild(editor);
+      }
+      editor.innerHTML = `
+        <h3 style="margin:0 0 10px 0; font-size:1em; color:#fff;">Editing: ${planet.name}</h3>
+        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Mass:</label>
+        <input type="number" id="editMass" value="${planet.mass}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Radius:</label>
+        <input type="number" id="editRadius" value="${planet.radius}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+        <label style="font-size:0.8em; color:rgba(255,255,255,0.85);">Color:</label>
+        <input type="color" id="editColor" value="${planet.color}" style="margin:3px 0; width:100%; padding:6px 10px; border-radius:5px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.4); color:#fff;">
+        <button id="savePlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:linear-gradient(180deg, #4A6DA7 0%, #3A5FCD 100%); color:#fff;">Save</button>
+        <button id="cancelPlanetBtn" style="margin-top:5px; width:100%; padding:6px 10px; border:none; border-radius:5px; background:rgba(255,0,0,0.6); color:#fff;">Cancel</button>
+      `;
+      editor.style.left = clientX + "px";
+      editor.style.top = clientY + "px";
+      editor.style.display = "block";
+      document.getElementById("savePlanetBtn").onclick = function() {
+        planet.mass = parseFloat(document.getElementById("editMass").value);
+        planet.radius = parseFloat(document.getElementById("editRadius").value);
+        planet.color = document.getElementById("editColor").value;
+        editor.style.display = "none";
+      };
+      document.getElementById("cancelPlanetBtn").onclick = function() {
+        editor.style.display = "none";
+      };
+    }
+
+    // --- Mouse and Touch Event Handlers ---
     let draggingPlanet = null;
     let dragOffsetX = 0, dragOffsetY = 0, lastDragX = 0, lastDragY = 0;
     let dragDeltaX = 0, dragDeltaY = 0;
@@ -1389,7 +1349,13 @@
       }
     });
 
-    // --- Touch Event Listeners for Mobile Support ---
+    // --- Touch Support ---
+    let initialPinchDistance = 0;
+    let initialTargetScale = 1;
+    let pinchCenterX = 0, pinchCenterY = 0;
+    let pinchWorldX = 0, pinchWorldY = 0;
+    let isCameraDragging = false;
+    let cameraDragStartX = 0, cameraDragStartY = 0, initialCameraX = 0, initialCameraY = 0;
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       if (e.touches.length === 1) {
@@ -1435,7 +1401,6 @@
         pinchWorldY = targetCamera.y + centerY / targetScale;
       }
     });
-    
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       if (e.touches.length === 1) {
@@ -1475,7 +1440,6 @@
         targetCamera.y = pinchWorldY - centerY / targetScale;
       }
     });
-    
     canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
       if (e.touches.length === 0) {
@@ -1499,6 +1463,122 @@
       debugMode = e.target.checked;
     });
 
+    // --- Astronomer Mode ---
+    const astronomistBtn = document.getElementById('astronomistBtn');
+    const astronomistInfo = document.getElementById('astronomistInfo');
+    let astronomistMode = false;
+    astronomistBtn.addEventListener('click', () => {
+      astronomistMode = !astronomistMode;
+      astronomistBtn.textContent = astronomistMode ? "Disable" : "Enable";
+      if (!astronomistMode) {
+        astronomistInfo.style.opacity = 0;
+      }
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (!astronomistMode) {
+        astronomistInfo.style.opacity = 0;
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const worldX = mouseX / scale + camera.x;
+      const worldY = mouseY / scale + camera.y;
+      let hoveredPlanet = null;
+      for (let planet of planets) {
+        const dx = worldX - planet.x;
+        const dy = worldY - planet.y;
+        if (Math.hypot(dx, dy) < planet.radius) {
+          hoveredPlanet = planet;
+          break;
+        }
+      }
+      if (hoveredPlanet) {
+        const ageSeconds = ((Date.now() - hoveredPlanet.createdAt) / 1000).toFixed(1);
+        const speed = Math.hypot(hoveredPlanet.vx, hoveredPlanet.vy).toFixed(2);
+        let angleDeg = (Math.atan2(hoveredPlanet.vy, hoveredPlanet.vx) * 180 / Math.PI).toFixed(1);
+        if (angleDeg < 0) angleDeg = (parseFloat(angleDeg) + 360).toFixed(1);
+        let relation = "";
+        if (hoveredPlanet.primary) {
+          relation = "Parent body: " + hoveredPlanet.primary.name;
+        } else {
+          const children = planets.filter(p => p.primary === hoveredPlanet);
+          relation = children.length > 0 
+            ? "Child bodies: " + children.map(p => p.name).join(", ") 
+            : "No parent or child body";
+        }
+        astronomistInfo.innerHTML = `<strong>${hoveredPlanet.name}</strong><br>
+            Age: ${ageSeconds} s<br>
+            ${relation}<br>
+            Speed: ${speed} | Direction: ${angleDeg}°`;
+        astronomistInfo.style.left = (e.clientX + 10) + 'px';
+        astronomistInfo.style.top = (e.clientY + 10) + 'px';
+        astronomistInfo.style.opacity = 1;
+      } else {
+        astronomistInfo.style.opacity = 0;
+      }
+    });
+
+    // --- Save/Load State ---
+    const saveStateBtn = document.getElementById('saveStateBtn');
+    const loadStateBtn = document.getElementById('loadStateBtn');
+    saveStateBtn.addEventListener('click', () => {
+      const state = {
+        planets: planets.map(p => ({
+          x: p.x,
+          y: p.y,
+          vx: p.vx,
+          vy: p.vy,
+          mass: p.mass,
+          radius: p.radius,
+          color: p.color,
+          gravityMultiplier: p.gravityMultiplier,
+          type: p.type,
+          createdAt: p.createdAt,
+          name: p.name
+        })),
+        camera: { x: camera.x, y: camera.y, scale },
+        G,
+        timeScale,
+        showOrbits,
+        paused,
+        debugMode
+      };
+      localStorage.setItem('gravitySimulationState', JSON.stringify(state));
+      alert('State saved successfully!');
+    });
+    loadStateBtn.addEventListener('click', () => {
+      const saved = localStorage.getItem('gravitySimulationState');
+      if (!saved) {
+        alert('No saved state found!');
+        return;
+      }
+      const state = JSON.parse(saved);
+      planets = [];
+      for (const p of state.planets) {
+        const newPlanet = new Planet(
+          p.x, p.y, p.vx, p.vy, p.mass, p.radius, p.color, p.gravityMultiplier, p.type
+        );
+        newPlanet.createdAt = p.createdAt;
+        newPlanet.name = p.name;
+        planets.push(newPlanet);
+      }
+      camera.x = state.camera.x;
+      camera.y = state.camera.y;
+      scale = state.camera.scale;
+      targetCamera.x = camera.x;
+      targetCamera.y = camera.y;
+      targetScale = scale;
+      G = state.G;
+      gSlider.value = G;
+      gDisplay.textContent = G;
+      timeScale = state.timeScale;
+      showOrbits = state.showOrbits;
+      paused = state.paused;
+      debugMode = state.debugMode;
+    });
+
+    // --- Main Update and Draw ---
     function updateSimulation() {
       assignParents();
       for (let i = 0; i < planets.length; i++) {
@@ -1523,22 +1603,20 @@
       }
       planets.forEach(planet => planet.update());
       handleCollisions();
-      updateParticles();
       updateWaves();
       updateCollisionEffects();
+      gasClouds.forEach(cloud => cloud.update());
     }
-
     function drawSimulation() {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       drawBackground();
       if (showOrbits) drawOrbits();
+      // Рисуем облака газа позади планет
+      gasClouds.forEach(cloud => cloud.draw(ctx));
       planets.forEach(planet => planet.draw());
-      drawParticles();
       drawWaves();
       drawCollisionEffects();
-
       if(debugMode){
         planets.forEach(planet => {
           const speed = Math.hypot(planet.vx, planet.vy);
@@ -1546,16 +1624,39 @@
           ctx.font = "10px sans-serif";
           ctx.fillText(`Speed: ${speed.toFixed(2)}`, 
             (planet.x - camera.x) * scale, 
-            (planet.y - camera.y) * scale - planet.radius * scale - 5
-          );
+            (planet.y - camera.y) * scale - planet.radius * scale - 5);
           ctx.fillText(`Mass: ${planet.mass.toFixed(0)}`, 
             (planet.x - camera.x) * scale, 
-            (planet.y - camera.y) * scale - planet.radius * scale - 15
-          );
+            (planet.y - camera.y) * scale - planet.radius * scale - 15);
         });
       }
     }
-
+    function handleCollisions() {
+      for (let i = 0; i < planets.length; i++) {
+        for (let j = i + 1; j < planets.length; j++) {
+          const p1 = planets[i], p2 = planets[j];
+          const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          if (d < p1.radius + p2.radius) {
+            const collisionX = (p1.x + p2.x) / 2;
+            const collisionY = (p1.y + p2.y) / 2;
+            spawnCollisionEffect(collisionX, collisionY);
+            playCollisionSound();
+            if (p1.mass >= p2.mass) {
+              p1.mass += p2.mass;
+              p1.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
+              planets.splice(j, 1);
+              j--;
+            } else {
+              p2.mass += p1.mass;
+              p2.radius = Math.sqrt(p1.radius * p1.radius + p2.radius * p2.radius);
+              planets.splice(i, 1);
+              i--;
+              break;
+            }
+          }
+        }
+      }
+    }
     function animate() {
       if (!paused) {
         updateSimulation();
@@ -1568,21 +1669,16 @@
       camera.x += (targetCamera.x - camera.x) * followFactor;
       camera.y += (targetCamera.y - camera.y) * followFactor;
       scale += (targetScale - scale) * 0.1;
-
       drawSimulation();
       requestAnimationFrame(animate);
     }
-
     addPlanets();
     animate();
-
     window.addEventListener('resize', () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     });
-
-    const createObjectForm = document.getElementById('createObjectForm');
-    createObjectForm.addEventListener('submit', (e) => {
+    document.getElementById('createObjectForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const type = document.getElementById('objectType').value;
       let posX = parseFloat(document.getElementById('posX').value);
@@ -1617,236 +1713,6 @@
       const color = document.getElementById('color').value;
       const newObj = new Planet(posX, posY, velX, velY, mass, radius, color, gravityMultiplier, type);
       planets.push(newObj);
-    });
-
-    const astronomistBtn = document.getElementById('astronomistBtn');
-    const astronomistInfo = document.getElementById('astronomistInfo');
-    let astronomistMode = false;
-
-    astronomistBtn.addEventListener('click', () => {
-      astronomistMode = !astronomistMode;
-      astronomistBtn.textContent = astronomistMode ? "Disable" : "Enable";
-      if (!astronomistMode) {
-        astronomistInfo.style.opacity = 0;
-      }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-      if (!astronomistMode) {
-        astronomistInfo.style.opacity = 0;
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      const worldX = mouseX / scale + camera.x;
-      const worldY = mouseY / scale + camera.y;
-
-      let hoveredPlanet = null;
-      for (let planet of planets) {
-        const dx = worldX - planet.x;
-        const dy = worldY - planet.y;
-        if (Math.hypot(dx, dy) < planet.radius) {
-          hoveredPlanet = planet;
-          break;
-        }
-      }
-
-      if (hoveredPlanet) {
-        const ageSeconds = ((Date.now() - hoveredPlanet.createdAt) / 1000).toFixed(1);
-        const speed = Math.hypot(hoveredPlanet.vx, hoveredPlanet.vy).toFixed(2);
-        let angleDeg = (Math.atan2(hoveredPlanet.vy, hoveredPlanet.vx) * 180 / Math.PI).toFixed(1);
-        if (angleDeg < 0) angleDeg = (parseFloat(angleDeg) + 360).toFixed(1);
-
-        let relation = "";
-        if (hoveredPlanet.primary) {
-          relation = "Parent body: " + hoveredPlanet.primary.name;
-        } else {
-          const children = planets.filter(p => p.primary === hoveredPlanet);
-          relation = children.length > 0 
-            ? "Child bodies: " + children.map(p => p.name).join(", ") 
-            : "No parent or child body";
-        }
-
-        astronomistInfo.innerHTML = `<strong>${hoveredPlanet.name}</strong><br>
-            Age: ${ageSeconds} s<br>
-            ${relation}<br>
-            Speed: ${speed} | Direction: ${angleDeg}°`;
-        astronomistInfo.style.left = (e.clientX + 10) + 'px';
-        astronomistInfo.style.top = (e.clientY + 10) + 'px';
-        astronomistInfo.style.opacity = 1;
-      } else {
-        astronomistInfo.style.opacity = 0;
-      }
-    });
-
-    const saveStateBtn = document.getElementById('saveStateBtn');
-    const loadStateBtn = document.getElementById('loadStateBtn');
-
-    saveStateBtn.addEventListener('click', () => {
-      const state = {
-        planets: planets.map(p => ({
-          x: p.x,
-          y: p.y,
-          vx: p.vx,
-          vy: p.vy,
-          mass: p.mass,
-          radius: p.radius,
-          color: p.color,
-          gravityMultiplier: p.gravityMultiplier,
-          type: p.type,
-          createdAt: p.createdAt,
-          name: p.name
-        })),
-        camera: { x: camera.x, y: camera.y, scale },
-        G,
-        timeScale,
-        showOrbits,
-        paused,
-        debugMode
-      };
-
-      localStorage.setItem('gravitySimulationState', JSON.stringify(state));
-      alert('State saved successfully!');
-    });
-
-    loadStateBtn.addEventListener('click', () => {
-      const saved = localStorage.getItem('gravitySimulationState');
-      if (!saved) {
-        alert('No saved state found!');
-        return;
-      }
-      const state = JSON.parse(saved);
-
-      planets = [];
-      for (const p of state.planets) {
-        const newPlanet = new Planet(
-          p.x, p.y, p.vx, p.vy, p.mass, p.radius, p.color, p.gravityMultiplier, p.type
-        );
-        newPlanet.createdAt = p.createdAt;
-        newPlanet.name = p.name;
-        planets.push(newPlanet);
-      }
-
-      camera.x = state.camera.x;
-      camera.y = state.camera.y;
-      scale = state.camera.scale;
-      targetCamera.x = camera.x;
-      targetCamera.y = camera.y;
-      targetScale = scale;
-
-      G = state.G;
-      gSlider.value = G;
-      gDisplay.textContent = G;
-
-      timeScale = state.timeScale;
-      timeScaleSlider.value = timeScale;
-      timeScaleDisplay.textContent = timeScale.toFixed(1);
-
-      showOrbits = state.showOrbits;
-      toggleOrbitsBtn.textContent = showOrbits ? "Disable orbits" : "Enable orbits";
-
-      paused = state.paused;
-      pauseButton.textContent = paused ? "Resume" : "Pause";
-
-      debugMode = state.debugMode;
-      document.getElementById("debugModeCheckbox").checked = debugMode;
-
-      alert('State loaded successfully!');
-    });
-
-    // --- Кнопка для скрытия/отображения меню ---
-    const menuToggleBtn = document.getElementById('menuToggleBtn');
-    const controlPanel = document.getElementById('controlPanel');
-    menuToggleBtn.addEventListener('click', () => {
-      if (controlPanel.style.display === 'none') {
-         controlPanel.style.display = 'block';
-         menuToggleBtn.textContent = '<';
-      } else {
-         controlPanel.style.display = 'none';
-         menuToggleBtn.textContent = '>';
-      }
-    });
-
-    function updateSimulation() {
-      assignParents();
-      for (let i = 0; i < planets.length; i++) {
-        const p1 = planets[i];
-        let ax = 0, ay = 0;
-        for (let j = 0; j < planets.length; j++) {
-          if (i === j) continue;
-          const p2 = planets[j];
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
-          let distSq = dx * dx + dy * dy;
-          let distance = Math.sqrt(distSq);
-          if (distance < 1) distance = 1;
-          const force = G * p2.mass * p2.gravityMultiplier / distSq;
-          ax += force * (dx / distance);
-          ay += force * (dy / distance);
-        }
-        if (p1 !== draggingPlanet) {
-          p1.vx += ax * timeScale;
-          p1.vy += ay * timeScale;
-        }
-      }
-      planets.forEach(planet => planet.update());
-      handleCollisions();
-      updateParticles();
-      updateWaves();
-      updateCollisionEffects();
-    }
-
-    function drawSimulation() {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      drawBackground();
-      if (showOrbits) drawOrbits();
-      planets.forEach(planet => planet.draw());
-      drawParticles();
-      drawWaves();
-      drawCollisionEffects();
-
-      if(debugMode){
-        planets.forEach(planet => {
-          const speed = Math.hypot(planet.vx, planet.vy);
-          ctx.fillStyle = "white";
-          ctx.font = "10px sans-serif";
-          ctx.fillText(`Speed: ${speed.toFixed(2)}`, 
-            (planet.x - camera.x) * scale, 
-            (planet.y - camera.y) * scale - planet.radius * scale - 5
-          );
-          ctx.fillText(`Mass: ${planet.mass.toFixed(0)}`, 
-            (planet.x - camera.x) * scale, 
-            (planet.y - camera.y) * scale - planet.radius * scale - 15
-          );
-        });
-      }
-    }
-
-    function animate() {
-      if (!paused) {
-        updateSimulation();
-        if (cameraFollow) {
-          targetCamera.x = cameraFollow.x - canvas.width / (2 * targetScale);
-          targetCamera.y = cameraFollow.y - canvas.height / (2 * targetScale);
-        }
-      }
-      const followFactor = cameraFollow ? 0.3 : 0.1;
-      camera.x += (targetCamera.x - camera.x) * followFactor;
-      camera.y += (targetCamera.y - camera.y) * followFactor;
-      scale += (targetScale - scale) * 0.1;
-
-      drawSimulation();
-      requestAnimationFrame(animate);
-    }
-    
-    animate();
-
-    window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
     });
   </script>
 </body>
